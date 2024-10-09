@@ -1,9 +1,10 @@
 from selenium import webdriver
-from selenium.webdriver.common.by import By #Permet d'accéder aux différents élements de la page web
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By # To have access to elements of web drivers
 import time
 import pandas as pd
+import os
+import concurrent.futures
+from Tools import generate_date_ranges
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -12,13 +13,16 @@ FIRE_DEPARTURE_URL = "https://bdiff.agriculture.gouv.fr/incendies"
 
 class Scrapper():
   def __init__(self, driver="firefox"):
-    if driver == "firefox":
-      self.driver = webdriver.Firefox()
+    self.driver_name = driver
+  
+  def __create_driver(self):
+    if (self.driver_name == 'firefox'):
+      return webdriver.Firefox()
     else:
-      self.driver = webdriver.Chrome()
+      return webdriver.Chrome()
   
   def get_fire_departure_in_france_data(self, start_date, end_date):
-    d = self.driver
+    d = self.__create_driver()
     d.maximize_window()
     d.get(FIRE_DEPARTURE_URL)
     assert "BDIFF : Recherche et consultation des incendies de forêt" in d.title
@@ -53,10 +57,10 @@ class Scrapper():
       try:
         # if disabled, stop scrapping
         next_button_li = d.find_element(By.XPATH, "//li[@class='page-item disabled']/a[@rel='next']")
-        print("bouton next désactivé")
+        # print("bouton next désactivé")
         break
       except:
-        print("bouton next activé")
+        # print("bouton next activé")
         pass
       
       # Click on next link
@@ -65,10 +69,10 @@ class Scrapper():
         d.execute_script("arguments[0].scrollIntoView(true);", next_button)
         time.sleep(1)
         next_button.click()
-        print("page suivante")
+        # print("page suivante")
         time.sleep(2)
       except Exception as e:
-        print("j'ai pas réussi à appuyer sur next button")
+        # print("j'ai pas réussi à appuyer sur next button")
         break
     
     d.close()
@@ -89,3 +93,23 @@ class Scrapper():
       table_data.append(cols)
     
     return pd.DataFrame(table_data, columns=headers)
+  
+  def __scrape_data_for_range(self, date_range):
+    start_date, end_date = date_range
+    new_instance_scrapper = Scrapper() # Will create several instances of webDriver
+    return new_instance_scrapper.get_fire_departure_in_france_data(start_date, end_date)
+  
+  def generate_dataframe(self, start_date, end_date, interval_days=30):
+    max_workers = os.cpu_count() or 1  # Use nb of CPU for parallel call
+    print(f"{max_workers} max workers...")
+    date_ranges = generate_date_ranges(start_date, end_date, interval_days)
+    print(date_ranges)
+
+    # Parallel call
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+      results = list(executor.map(self.__scrape_data_for_range, date_ranges))
+
+    # Merge all DataFrame together
+    combined_data = pd.concat(results, ignore_index=True)
+    
+    return combined_data
