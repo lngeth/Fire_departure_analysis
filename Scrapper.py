@@ -1,12 +1,23 @@
+# Selenium
 from selenium import webdriver
 from selenium.webdriver.common.by import By # To have access to elements of web drivers
+from selenium.common.exceptions import StaleElementReferenceException
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+# Concurrent programming
 import time
-import pandas as pd
 import os
 import concurrent.futures
-from Tools import generate_date_ranges
-
 import warnings
+
+# Data Analysis
+import pandas as pd
+
+# Tools
+from Tools import generate_date_ranges_days
+
+
 warnings.filterwarnings("ignore")
 
 FIRE_DEPARTURE_URL = "https://bdiff.agriculture.gouv.fr/incendies"
@@ -42,9 +53,10 @@ class Scrapper():
     time.sleep(2)
 
     # Click on filter button
-    filter_button = d.find_element(By.ID, "if_submit")
+    filter_button = WebDriverWait(d, 10).until(
+      EC.element_to_be_clickable((By.ID, 'if_submit'))
+    )
     d.execute_script("arguments[0].scrollIntoView(true);", filter_button)
-    time.sleep(2)
     filter_button.click()
     
     # Retrieve all data from table of each pages
@@ -52,28 +64,26 @@ class Scrapper():
     while True:
       df_page = self.__scrape_table(d)
       all_data.append(df_page)
-
-      # Check if <a rel="next"> is disabled
-      try:
-        # if disabled, stop scrapping
-        next_button_li = d.find_element(By.XPATH, "//li[@class='page-item disabled']/a[@rel='next']")
-        # print("bouton next désactivé")
-        break
-      except:
-        # print("bouton next activé")
-        pass
       
       # Click on next link
       try:
-        next_button = d.find_element(By.CSS_SELECTOR, 'a.page-link[rel="next"]')
+        next_button = WebDriverWait(d, 10).until(
+          EC.element_to_be_clickable((By.CSS_SELECTOR, 'a.page-link[rel="next"]'))
+        )
         d.execute_script("arguments[0].scrollIntoView(true);", next_button)
-        time.sleep(1)
+        time.sleep(2)
         next_button.click()
         # print("page suivante")
-        time.sleep(2)
       except Exception as e:
-        # print("j'ai pas réussi à appuyer sur next button")
+        # print("fin de scraping")
         break
+      except StaleElementReferenceException as e:
+        next_button = WebDriverWait(d, 10).until(
+          EC.element_to_be_clickable((By.CSS_SELECTOR, 'a.page-link[rel="next"]'))
+        )
+        d.execute_script("arguments[0].scrollIntoView(true);", next_button)
+        time.sleep(2)
+        next_button.click()
     
     d.close()
     print("Scrapping done successfully...")
@@ -102,7 +112,7 @@ class Scrapper():
   def generate_dataframe(self, start_date, end_date, interval_days=30):
     max_workers = os.cpu_count() or 1  # Use nb of CPU for parallel call
     print(f"{max_workers} max workers...")
-    date_ranges = generate_date_ranges(start_date, end_date, interval_days)
+    date_ranges = generate_date_ranges_days(start_date, end_date, interval_days)
     print(date_ranges)
 
     # Parallel call
