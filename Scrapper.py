@@ -33,6 +33,9 @@ class Scrapper():
       return webdriver.Chrome()
   
   def get_fire_departure_in_france_data(self, start_date, end_date):
+    """Sequential method to retrieve Data from a html page with Selenium
+    """
+    
     d = self.__create_driver()
     d.maximize_window()
     d.get(FIRE_DEPARTURE_URL)
@@ -91,6 +94,9 @@ class Scrapper():
     return pd.concat(all_data, ignore_index=True)
   
   def __scrape_table(self, driver):
+    """Retrieve table from html source page and transform retrieved data into Pandas DataFrame
+    """
+    
     table = driver.find_element(By.ID, "incendies-table")
     headers = [header.text for header in table.find_elements(By.XPATH, ".//thead/tr/th")]
 
@@ -105,11 +111,17 @@ class Scrapper():
     return pd.DataFrame(table_data, columns=headers)
   
   def __scrape_data_for_range(self, date_range):
+    """Creates new instance of Scrapper and scrap data by range date
+    """
+    
     start_date, end_date = date_range
     new_instance_scrapper = Scrapper() # Will create several instances of webDriver
     return new_instance_scrapper.get_fire_departure_in_france_data(start_date, end_date)
   
   def generate_dataframe(self, start_date, end_date, interval_days=30):
+    """Used to do the scraping with parallel method
+    """
+    
     max_workers = os.cpu_count() or 1  # Use nb of CPU for parallel call
     print(f"{max_workers} max workers...")
     date_ranges = generate_date_ranges_days(start_date, end_date, interval_days)
